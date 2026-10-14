@@ -92,7 +92,11 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "platezhi/1.0"
 
     def log_message(self, fmt, *args):
-        print(f"{self.address_string()} {fmt % args}", flush=True)
+        # behind nginx the peer is 127.0.0.1; log the real client it forwards
+        client = self.client_address[0]
+        if client in ("127.0.0.1", "::1"):
+            client = self.headers.get("X-Real-IP", client) if self.headers else client
+        print(f"{client} {fmt % args}", flush=True)
 
     def _send(self, status, payload=None, ctype="application/json; charset=utf-8", extra=None):
         data = b""

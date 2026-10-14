@@ -85,6 +85,11 @@ h1{font-family:var(--f-display);font-weight:700;font-size:clamp(24px,4vw,32px);l
 .pill.ex{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .actions{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 .paid{color:var(--ok);font-size:13px}
+.check{display:flex;gap:8px;align-items:center;font-size:14px}
+.check input{width:auto}
+.payrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.payrow input{width:7.5em;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:4px 8px}
+.linkbtn{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;font-size:13px}
 @media (max-width:520px){
   .item{grid-template-columns:52px minmax(0,1fr)}
   .right{grid-column:1 / -1;grid-template-columns:auto 1fr;justify-items:start;align-items:center}
@@ -184,6 +189,7 @@ form.sheet h2{margin:0;font-family:var(--f-display);font-weight:500;font-size:18
       <div class="fld"><label for="f-cur">Валюта</label>
         <select id="f-cur"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option></select></div>
     </div>
+    <label class="check" for="f-var"><input type="checkbox" id="f-var"> Сумма меняется каждый месяц (свет, вода, газ)</label>
     <div class="row2">
       <div class="fld"><label for="f-cycle">Периодичность</label>
         <select id="f-cycle"><option value="month">Каждый месяц</option><option value="week">Каждую неделю</option><option value="quarter">Раз в квартал</option><option value="year">Раз в год</option><option value="once">Разово</option></select></div>
@@ -300,7 +306,22 @@ function boot(){
 function decorate(i){
   const t = todayD();
   const days = i.nextDate ? daysBetween(t, parse(i.nextDate)) : 9999;
-  return Object.assign({}, i, {days});
+  return Object.assign({}, i, {days, amt: expected(i)});
+}
+function expected(i){
+  if (!i.variable) return i.amount;
+  const paid = (i.history||[]).map(h => h.amount).filter(a => a>0).slice(-3);
+  if (!paid.length) return i.amount || 0;
+  return Math.round(paid.reduce((a,b)=>a+b,0) / paid.length);
+}
+function amtLabel(i){
+  if (!i.variable) return money(i.amt,i.currency);
+  return i.amt ? "≈ "+money(i.amt,i.currency) : "по счёту";
+}
+// sum of expected amounts, marked "≈" when a variable payment is included
+function approxSums(list, fn){
+  const s = fmtSums(sumByCur(list, fn || (i => i.amt)));
+  return list.some(i => i.variable) ? "≈ "+s : s;
 }
 function occurrencesIn(i, y, m){
   // every due date of item i falling in month (y,m), projected forward from nextDate
@@ -328,14 +349,15 @@ function render(){
 function renderStats(items){
   const overdue = items.filter(i => i.days<0);
   const week = items.filter(i => i.days>=0 && i.days<=7);
-  const monthly = sumByCur(items, i => i.amount*(PER_MONTH[i.cycle]||0));
+  const monthly = sumByCur(items, i => i.amt*(PER_MONTH[i.cycle]||0));
+  const approx = items.some(i => i.variable && PER_MONTH[i.cycle]) ? "≈ " : "";
   const yearly = {}; Object.keys(monthly).forEach(k => yearly[k]=monthly[k]*12);
   const recurring = items.filter(i => i.cycle!=="once").length;
   $("stats").innerHTML =
-    stat("Просрочено", overdue.length ? fmtSums(sumByCur(overdue,i=>i.amount)) : "нет", overdue.length ? overdue.length+" "+plural(overdue.length,"платёж","платежа","платежей") : "всё оплачено вовремя", overdue.length>0) +
-    stat("Ближайшие 7 дней", fmtSums(sumByCur(week,i=>i.amount)), week.length+" "+plural(week.length,"платёж","платежа","платежей")) +
-    stat("В среднем в месяц", fmtSums(monthly), recurring+" "+plural(recurring,"регулярный","регулярных","регулярных")) +
-    stat("В год", fmtSums(yearly), "по текущим тарифам");
+    stat("Просрочено", overdue.length ? approxSums(overdue) : "нет", overdue.length ? overdue.length+" "+plural(overdue.length,"платёж","платежа","платежей") : "всё оплачено вовремя", overdue.length>0) +
+    stat("Ближайшие 7 дней", approxSums(week), week.length+" "+plural(week.length,"платёж","платежа","платежей")) +
+    stat("В среднем в месяц", approx+fmtSums(monthly), recurring+" "+plural(recurring,"регулярный","регулярных","регулярных")) +
+    stat("В год", approx+fmtSums(yearly), "по текущим тарифам");
 }
 function stat(l,v,h,alert){ return `<div class="stat${alert?" alert":""}"><span class="lbl">${l}</span><span class="val">${esc(v)}</span><span class="hint">${esc(h)}</span></div>`; }
 
@@ -361,7 +383,7 @@ function renderList(items){
     ["Позже", list.filter(i=>i.days>31)]
   ].filter(g => g[1].length);
   el.innerHTML = groups.map(([title, arr]) =>
-    `<section class="group"><h2>${title}<span class="num">${fmtSums(sumByCur(arr,i=>i.amount))}</span></h2>${arr.map(row).join("")}</section>`
+    `<section class="group"><h2>${title}<span class="num">${approxSums(arr)}</span></h2>${arr.map(row).join("")}</section>`
   ).join("") || `<div class="empty">В этой категории платежей нет.</div>`;
 }
 
@@ -369,8 +391,12 @@ function row(i){
   const d = i.nextDate ? parse(i.nextDate) : null;
   const cls = i.days<0 ? "late" : i.days===0 ? "today" : i.days<=7 ? "soon" : "later";
   const confirming = state.confirm===i.id;
-  const paidNote = i.lastPaid ? `<span class="paid">✓ оплачено ${fmtShort(i.lastPaid)}</span>` : "";
-  const actions = confirming
+  const canUndo = i.cycle!=="once" && (i.history||[]).length;
+  const paidNote = i.lastPaid ? `<span class="paid">✓ оплачено ${fmtShort(i.lastPaid)}</span>${canUndo?`<button class="linkbtn" data-act="unpay" data-id="${i.id}" type="button">отменить</button>`:""}` : "";
+  const paying = state.paying===i.id;
+  const actions = paying
+    ? `<span class="payrow"><label class="meta" for="pay-amt">Сколько заплатили?</label><input id="pay-amt" inputmode="decimal" value="${i.amt ? String(i.amt).replace(".",",") : ""}" placeholder="по счёту"><button class="btn small primary" data-act="pay-ok" data-id="${i.id}" type="button">Готово</button><button class="btn small" data-act="pay-cancel" type="button">Отмена</button></span>`
+    : confirming
     ? `<span class="meta">Удалить?</span><button class="btn small danger" data-act="del-yes" data-id="${i.id}" type="button">Да</button><button class="btn small" data-act="del-no" type="button">Нет</button>`
     : `<button class="btn small primary" data-act="pay" data-id="${i.id}" type="button">Оплачено</button><button class="btn small ghost" data-act="edit" data-id="${i.id}" type="button" aria-label="Изменить ${esc(i.name)}">Изменить</button><button class="btn small ghost" data-act="del" data-id="${i.id}" type="button" aria-label="Удалить ${esc(i.name)}">✕</button>`;
   return `<article class="item${i.days<0?" overdue":""}">
@@ -380,7 +406,7 @@ function row(i){
       <div class="meta"><span>${CYCLE[i.cycle]||""}</span><span>${esc(i.category||"")}</span>${i.method?`<span>${esc(i.method)}</span>`:""}${paidNote}</div>
     </div>
     <div class="right">
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><span class="pill ${cls}">${relLabel(i.days)}</span><span class="amount">${money(i.amount,i.currency)}</span></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><span class="pill ${cls}">${relLabel(i.days)}</span><span class="amount">${amtLabel(i)}</span></div>
       <div class="actions">${actions}</div>
     </div>
   </article>`;
@@ -401,24 +427,25 @@ function renderCal(items){
     const date = new Date(y,m,day);
     const late = list.some(i => i.days<0 && iso(date)===i.nextDate);
     const isToday = date.getTime()===t.getTime();
-    const title = list.map(i=>i.name+" — "+money(i.amount,i.currency)).join("\n");
+    const title = list.map(i=>i.name+" — "+amtLabel(i)).join("\n");
     html += `<div class="c${list.length?" has":""}${late?" late":""}${isToday?" today":""}"${title?` title="${esc(title)}"`:""}>${day}${list.length?`<span class="dots">${list.slice(0,3).map(()=>"<i></i>").join("")}</span>`:""}</div>`;
   }
   $("cal").innerHTML = html;
   const days = Object.keys(byDay).map(Number).sort((a,b)=>a-b);
-  const total = {}; days.forEach(d => byDay[d].forEach(i => total[i.currency]=(total[i.currency]||0)+i.amount));
+  const total = {}; days.forEach(d => byDay[d].forEach(i => total[i.currency]=(total[i.currency]||0)+i.amt));
+  const monthApprox = days.some(d => byDay[d].some(i => i.variable)) ? "≈ " : "";
   $("month-sum").innerHTML = days.length
-    ? days.slice(0,8).map(d => byDay[d].map(i=>`<div class="row"><span>${d} · ${esc(i.name)}</span><span class="num">${money(i.amount,i.currency)}</span></div>`).join("")).join("")
+    ? days.slice(0,8).map(d => byDay[d].map(i=>`<div class="row"><span>${d} · ${esc(i.name)}</span><span class="num">${amtLabel(i)}</span></div>`).join("")).join("")
       + (days.length>8?`<div class="row"><span>и ещё ${days.length-8} ${plural(days.length-8,"день","дня","дней")} с оплатами</span><span></span></div>`:"")
-      + `<div class="row" style="font-weight:600"><span style="color:var(--fg)">Итого за месяц</span><span class="num">${fmtSums(total)}</span></div>`
+      + `<div class="row" style="font-weight:600"><span style="color:var(--fg)">Итого за месяц</span><span class="num">${monthApprox}${fmtSums(total)}</span></div>`
     : `<div class="row"><span>В этом месяце платежей нет</span></div>`;
 }
 
 function renderCats(items){
   const rub = {}; let max = 0;
-  const per = sumByCur(items, i => i.amount*(PER_MONTH[i.cycle]||0));
+  const per = sumByCur(items, i => i.amt*(PER_MONTH[i.cycle]||0));
   const cur = Object.keys(per).sort((a,b)=>per[b]-per[a])[0] || "RUB";
-  items.filter(i=>i.currency===cur).forEach(i => { const v=i.amount*(PER_MONTH[i.cycle]||0); if(v){ rub[i.category]=(rub[i.category]||0)+v; } });
+  items.filter(i=>i.currency===cur).forEach(i => { const v=i.amt*(PER_MONTH[i.cycle]||0); if(v){ rub[i.category]=(rub[i.category]||0)+v; } });
   Object.values(rub).forEach(v => max=Math.max(max,v));
   const rows = Object.entries(rub).sort((a,b)=>b[1]-a[1]);
   $("cats").innerHTML = rows.length
@@ -438,11 +465,11 @@ function toast(text, undo){
 }
 async function safe(p, msg){ try { await p; return true; } catch(e){ toast(msg+" ("+(e&&e.code||"ошибка")+")"); return false; } }
 
-async function markPaid(id){
+async function markPaid(id, paidAmount){
   const it = state.items.find(i=>i.id===id); if(!it) return;
   const before = Object.assign({}, it);
   const today = iso(todayD());
-  const history = (it.history||[]).concat([{date:today, due:it.nextDate, amount:it.amount, currency:it.currency}]).slice(-24);
+  const history = (it.history||[]).concat([{date:today, due:it.nextDate, amount: paidAmount!=null ? paidAmount : it.amount, currency:it.currency}]).slice(-24);
   if (it.cycle==="once"){
     if (await safe(store.remove(id),"Не удалось сохранить")) toast("«"+it.name+"» оплачен и убран из списка", () => store.save(before));
     return;
@@ -452,12 +479,25 @@ async function markPaid(id){
   if (await safe(store.save(upd),"Не удалось сохранить")) toast("Отмечено. Следующая оплата "+fmtShort(next), () => store.save(before));
 }
 
+// roll back the most recent payment: the date returns to the one that payment covered
+async function unpay(id){
+  const it = state.items.find(i=>i.id===id); if(!it || !(it.history||[]).length) return;
+  const history = it.history.slice(0,-1);
+  const last = it.history[it.history.length-1];
+  const upd = Object.assign({}, it, {nextDate:last.due, history});
+  if (history.length) upd.lastPaid = history[history.length-1].date; else delete upd.lastPaid;
+  if (await safe(store.save(upd),"Не удалось сохранить")) toast("Оплата отменена. Срок снова "+fmtShort(last.due));
+}
+
+function parseNum(v){ return parseFloat(String(v).replace(/\s/g,"").replace(",",".")); }
+
 function openForm(id){
   state.editing = id || null;
   const it = id ? state.items.find(i=>i.id===id) : null;
   $("form-title").textContent = it ? "Изменить платёж" : "Новый платёж";
   $("f-name").value = it ? it.name : "";
-  $("f-amount").value = it ? String(it.amount).replace(".",",") : "";
+  $("f-amount").value = it && it.amount ? String(it.amount).replace(".",",") : "";
+  $("f-var").checked = !!(it && it.variable);
   $("f-cur").value = it ? it.currency : "RUB";
   $("f-cycle").value = it ? it.cycle : "month";
   $("f-date").value = it ? it.nextDate : iso(todayD());
@@ -473,14 +513,16 @@ $("f-cat").innerHTML = CATS.map(c=>`<option>${c}</option>`).join("");
 $("form").addEventListener("submit", async e => {
   e.preventDefault();
   const name = $("f-name").value.trim();
-  const amount = parseFloat($("f-amount").value.replace(/\s/g,"").replace(",","."));
+  const variable = $("f-var").checked;
+  const rawAmount = $("f-amount").value.trim();
+  const amount = rawAmount ? parseNum(rawAmount) : (variable ? 0 : NaN);
   const date = $("f-date").value;
-  const err = !name ? "Укажите название платежа." : !(amount>0) ? "Сумма должна быть числом больше нуля, например 299 или 1499,90." : !date ? "Выберите дату следующей оплаты." : "";
+  const err = !name ? "Укажите название платежа." : !(amount>0 || (variable && amount===0)) ? (variable ? "Сумма должна быть числом, например 2500, или оставьте поле пустым." : "Сумма должна быть числом больше нуля, например 299 или 1499,90. Если сумма каждый раз разная, отметьте «Сумма меняется».") : !date ? "Выберите дату следующей оплаты." : "";
   if (err){ $("f-err").textContent = err; $("f-err").hidden = false; return; }
   const old = state.editing ? state.items.find(i=>i.id===state.editing) : null;
   const item = Object.assign({}, old||{}, {
     id: old ? old.id : "s"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
-    name, amount: Math.round(amount*100)/100, currency:$("f-cur").value, cycle:$("f-cycle").value,
+    name, amount: Math.round(amount*100)/100, variable, currency:$("f-cur").value, cycle:$("f-cycle").value,
     nextDate: date, anchorDay: parse(date).getDate(), category:$("f-cat").value, method:$("f-method").value.trim()
   });
   if (old && old.example && old.name!==name) delete item.example;
@@ -497,12 +539,27 @@ $("prev-m").onclick = () => { let {y,m}=state.cal; m--; if(m<0){m=11;y--;} state
 $("next-m").onclick = () => { let {y,m}=state.cal; m++; if(m>11){m=0;y++;} state.cal={y,m}; render(); };
 $("filter").addEventListener("click", e => { const b=e.target.closest("button"); if(!b) return; state.filter=b.dataset.f; render(); });
 $("clear-ex").onclick = async () => { for (const i of state.items.filter(i=>i.example)) await safe(store.remove(i.id),"Не удалось удалить"); toast("Примеры удалены"); };
+$("list").addEventListener("keydown", e => {
+  if (e.target.id==="pay-amt" && e.key==="Enter"){ e.preventDefault(); e.target.closest("article").querySelector('[data-act="pay-ok"]').click(); }
+  if (e.target.id==="pay-amt" && e.key==="Escape"){ state.paying = null; render(); }
+});
 $("list").addEventListener("click", async e => {
   const b = e.target.closest("button[data-act]"); if(!b) return;
   const id = b.dataset.id;
   switch (b.dataset.act){
     case "add": openForm(); break;
-    case "pay": b.disabled = true; await markPaid(id); break;
+    case "pay": {
+      const it = state.items.find(i=>i.id===id);
+      if (it && it.variable){ state.paying = id; render(); setTimeout(() => { const f=$("pay-amt"); if(f){ f.focus(); f.select(); } }, 0); break; }
+      b.disabled = true; await markPaid(id); break;
+    }
+    case "pay-ok": {
+      const v = parseNum($("pay-amt").value);
+      if (!(v>0)){ toast("Введите сумму из счёта, например 2340 или 2340,50"); $("pay-amt").focus(); break; }
+      state.paying = null; b.disabled = true; await markPaid(id, Math.round(v*100)/100); break;
+    }
+    case "pay-cancel": state.paying = null; render(); break;
+    case "unpay": b.disabled = true; await unpay(id); break;
     case "edit": openForm(id); break;
     case "del": state.confirm = id; render(); break;
     case "del-no": state.confirm = null; render(); break;

@@ -53,6 +53,16 @@ journalctl --user -u platezhi -f     # логи
 
 В unit-файле стоят лимиты: 64 МБ памяти, 20% CPU.
 
+## Доступ из интернета (nginx + HTTPS)
+
+Приложение слушает только `127.0.0.1`, наружу его отдаёт nginx по HTTPS:
+
+1. В `.env`: `PLATEZHI_HOST=127.0.0.1` и длинный `PLATEZHI_PASSWORD`.
+2. DNS-запись домена (например `payments.example.com`) на внешний адрес сервера, проброшены порты 80 и 443.
+3. Конфиг nginx по образцу `deploy/nginx.conf.example` (HTTPS, лимит запросов против подбора пароля, заголовки безопасности), затем `certbot --nginx -d payments.example.com --redirect --hsts`.
+
+Порт приложения (8095) в файрволе открывать не нужно.
+
 ## API
 
 | | |

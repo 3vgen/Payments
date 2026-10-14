@@ -285,3 +285,57 @@ def test_phone_width_no_horizontal_scroll(open_page, server, dark):
     page.click("#add-btn")
     box = page.locator("form.sheet").bounding_box()
     assert box["x"] >= 0 and box["x"] + box["width"] <= 375
+
+
+def test_unpay_steps_back_any_time(open_page, server):
+    server.put("r1", **sub("Аренда", "2026-10-20"))
+    page = open_page()
+    pay(page, "Аренда")
+    wait_for(lambda: server.subs()["r1"]["nextDate"] == "2026-11-20")
+    pay(page, "Аренда")  # accidental second click
+    wait_for(lambda: server.subs()["r1"]["nextDate"] == "2026-12-20")
+    page.evaluate("document.getElementById('toast').hidden = true")  # undo no longer offered by the toast
+    row(page, "Аренда").get_by_role("button", name="отменить").click()
+    wait_for(lambda: server.subs()["r1"]["nextDate"] == "2026-11-20")
+    row(page, "Аренда").get_by_role("button", name="отменить").click()
+    wait_for(lambda: server.subs()["r1"]["nextDate"] == "2026-10-20")
+    s = server.subs()["r1"]
+    assert s["history"] == [] and "lastPaid" not in s
+    expect(row(page, "Аренда").get_by_role("button", name="отменить")).to_have_count(0)
+
+
+def test_variable_amount_payment(open_page, server):
+    page = open_page()
+    page.click("#add-btn")
+    page.fill("#f-name", "Электричество")
+    page.check("#f-var")
+    page.fill("#f-date", "2026-10-20")
+    page.click("#f-save")
+    r = row(page, "Электричество")
+    expect(r).to_contain_text("по счёту")
+    (sid, s), = server.subs().items()
+    assert s["variable"] is True and s["amount"] == 0
+
+    # paying asks for the actual amount
+    pay(page, "Электричество")
+    page.fill("#pay-amt", "2 340,50")
+    page.keyboard.press("Enter")
+    wait_for(lambda: server.subs()[sid]["nextDate"] == "2026-11-20")
+    assert server.subs()[sid]["history"][-1]["amount"] == 2340.5
+    expect(r).to_contain_text("≈ 2 341 ₽")
+
+    # the estimate is the average of the last payments
+    pay(page, "Электричество")
+    page.fill("#pay-amt", "2660")
+    r.get_by_role("button", name="Готово").click()
+    wait_for(lambda: server.subs()[sid]["nextDate"] == "2026-12-20")
+    expect(r).to_contain_text("≈ 2 500 ₽")
+    expect(page.locator("#stats .stat").nth(2)).to_contain_text("≈ 2 500 ₽")
+
+    # an empty amount is refused, cancel leaves the payment untouched
+    pay(page, "Электричество")
+    page.fill("#pay-amt", "")
+    r.get_by_role("button", name="Готово").click()
+    expect(page.locator("#toast")).to_contain_text("Введите сумму")
+    r.get_by_role("button", name="Отмена").click()
+    assert server.subs()[sid]["nextDate"] == "2026-12-20"

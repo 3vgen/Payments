@@ -10,3 +10,6 @@ data/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# real domain / server-specific deploy files
+deploy/local/
