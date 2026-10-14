@@ -85,8 +85,12 @@ h1{font-family:var(--f-display);font-weight:700;font-size:clamp(24px,4vw,32px);l
 .pill.ex{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .actions{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 .paid{color:var(--ok);font-size:13px}
-.check{display:flex;gap:8px;align-items:center;font-size:14px}
-.check input{width:auto}
+.amt-wrap{display:flex;min-width:0}
+.amt-wrap input{border-top-right-radius:0!important;border-bottom-right-radius:0!important}
+.tilde{border:1px solid var(--line);border-left:0;background:var(--surface);border-radius:0 8px 8px 0;padding:0 12px;font-family:var(--f-mono);font-size:17px;color:var(--muted)}
+.tilde[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.hint{font-size:12px;color:var(--muted);margin:0}
+.hint.on{color:var(--accent)}
 .payrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .payrow input{width:7.5em;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:4px 8px}
 .linkbtn{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;font-size:13px}
@@ -185,11 +189,11 @@ form.sheet h2{margin:0;font-family:var(--f-display);font-weight:500;font-size:18
     <h2 id="form-title">Новый платёж</h2>
     <div class="fld"><label for="f-name">Название</label><input id="f-name" placeholder="Например, Яндекс Плюс" maxlength="80" autocomplete="off"></div>
     <div class="row2">
-      <div class="fld"><label for="f-amount">Сумма</label><input id="f-amount" inputmode="decimal" placeholder="299"></div>
+      <div class="fld"><label for="f-amount">Сумма</label><div class="amt-wrap"><input id="f-amount" inputmode="decimal" placeholder="299 или ~2500" aria-describedby="f-amount-hint"><button type="button" class="tilde" id="f-tilde" aria-pressed="false" aria-label="Сумма меняется каждый месяц" title="Сумма меняется каждый месяц">~</button></div></div>
       <div class="fld"><label for="f-cur">Валюта</label>
         <select id="f-cur"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option></select></div>
     </div>
-    <label class="check" for="f-var"><input type="checkbox" id="f-var"> Сумма меняется каждый месяц (свет, вода, газ)</label>
+    <p class="hint" id="f-amount-hint"></p>
     <div class="row2">
       <div class="fld"><label for="f-cycle">Периодичность</label>
         <select id="f-cycle"><option value="month">Каждый месяц</option><option value="week">Каждую неделю</option><option value="quarter">Раз в квартал</option><option value="year">Раз в год</option><option value="once">Разово</option></select></div>
@@ -316,12 +320,12 @@ function expected(i){
 }
 function amtLabel(i){
   if (!i.variable) return money(i.amt,i.currency);
-  return i.amt ? "≈ "+money(i.amt,i.currency) : "по счёту";
+  return i.amt ? "~"+money(i.amt,i.currency) : "~ по счёту";
 }
-// sum of expected amounts, marked "≈" when a variable payment is included
+// sum of expected amounts, marked "~" when a variable payment is included
 function approxSums(list, fn){
   const s = fmtSums(sumByCur(list, fn || (i => i.amt)));
-  return list.some(i => i.variable) ? "≈ "+s : s;
+  return list.some(i => i.variable) ? "~"+s : s;
 }
 function occurrencesIn(i, y, m){
   // every due date of item i falling in month (y,m), projected forward from nextDate
@@ -350,7 +354,7 @@ function renderStats(items){
   const overdue = items.filter(i => i.days<0);
   const week = items.filter(i => i.days>=0 && i.days<=7);
   const monthly = sumByCur(items, i => i.amt*(PER_MONTH[i.cycle]||0));
-  const approx = items.some(i => i.variable && PER_MONTH[i.cycle]) ? "≈ " : "";
+  const approx = items.some(i => i.variable && PER_MONTH[i.cycle]) ? "~" : "";
   const yearly = {}; Object.keys(monthly).forEach(k => yearly[k]=monthly[k]*12);
   const recurring = items.filter(i => i.cycle!=="once").length;
   $("stats").innerHTML =
@@ -403,10 +407,10 @@ function row(i){
     <div class="date">${d?`<span class="d">${d.getDate()}</span><span class="m">${MON[d.getMonth()]}</span>`:"—"}</div>
     <div class="info">
       <div class="name">${esc(i.name)} ${i.example?'<span class="pill ex">пример</span>':""}</div>
-      <div class="meta"><span>${CYCLE[i.cycle]||""}</span><span>${esc(i.category||"")}</span>${i.method?`<span>${esc(i.method)}</span>`:""}${paidNote}</div>
+      <div class="meta"><span>${CYCLE[i.cycle]||""}${i.variable?", сумма меняется":""}</span><span>${esc(i.category||"")}</span>${i.method?`<span>${esc(i.method)}</span>`:""}${paidNote}</div>
     </div>
     <div class="right">
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><span class="pill ${cls}">${relLabel(i.days)}</span><span class="amount">${amtLabel(i)}</span></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><span class="pill ${cls}">${relLabel(i.days)}</span><span class="amount"${i.variable?' title="Сумма меняется: прогноз по последним оплатам, точную введёте при оплате"':""}>${amtLabel(i)}</span></div>
       <div class="actions">${actions}</div>
     </div>
   </article>`;
@@ -433,7 +437,7 @@ function renderCal(items){
   $("cal").innerHTML = html;
   const days = Object.keys(byDay).map(Number).sort((a,b)=>a-b);
   const total = {}; days.forEach(d => byDay[d].forEach(i => total[i.currency]=(total[i.currency]||0)+i.amt));
-  const monthApprox = days.some(d => byDay[d].some(i => i.variable)) ? "≈ " : "";
+  const monthApprox = days.some(d => byDay[d].some(i => i.variable)) ? "~" : "";
   $("month-sum").innerHTML = days.length
     ? days.slice(0,8).map(d => byDay[d].map(i=>`<div class="row"><span>${d} · ${esc(i.name)}</span><span class="num">${amtLabel(i)}</span></div>`).join("")).join("")
       + (days.length>8?`<div class="row"><span>и ещё ${days.length-8} ${plural(days.length-8,"день","дня","дней")} с оплатами</span><span></span></div>`:"")
@@ -489,6 +493,16 @@ async function unpay(id){
   if (await safe(store.save(upd),"Не удалось сохранить")) toast("Оплата отменена. Срок снова "+fmtShort(last.due));
 }
 
+function isVariable(v){ return /^\s*[~≈]/.test(v); }
+function syncTilde(){
+  const on = isVariable($("f-amount").value);
+  $("f-tilde").setAttribute("aria-pressed", on);
+  const h = $("f-amount-hint");
+  h.classList.toggle("on", on);
+  h.textContent = on
+    ? "~ плавающая сумма: точную введёте при оплате, а прогноз считается по прошлым счетам"
+    : "Сумма меняется каждый месяц (свет, вода)? Поставьте ~ перед ней или нажмите кнопку ~";
+}
 function parseNum(v){ return parseFloat(String(v).replace(/\s/g,"").replace(",",".")); }
 
 function openForm(id){
@@ -496,8 +510,9 @@ function openForm(id){
   const it = id ? state.items.find(i=>i.id===id) : null;
   $("form-title").textContent = it ? "Изменить платёж" : "Новый платёж";
   $("f-name").value = it ? it.name : "";
-  $("f-amount").value = it && it.amount ? String(it.amount).replace(".",",") : "";
-  $("f-var").checked = !!(it && it.variable);
+  const num = it && it.amount ? String(it.amount).replace(".",",") : "";
+  $("f-amount").value = it && it.variable ? "~"+num : num;
+  syncTilde();
   $("f-cur").value = it ? it.currency : "RUB";
   $("f-cycle").value = it ? it.cycle : "month";
   $("f-date").value = it ? it.nextDate : iso(todayD());
@@ -513,11 +528,11 @@ $("f-cat").innerHTML = CATS.map(c=>`<option>${c}</option>`).join("");
 $("form").addEventListener("submit", async e => {
   e.preventDefault();
   const name = $("f-name").value.trim();
-  const variable = $("f-var").checked;
-  const rawAmount = $("f-amount").value.trim();
+  const variable = isVariable($("f-amount").value);
+  const rawAmount = $("f-amount").value.trim().replace(/^[~≈]\s*/, "");
   const amount = rawAmount ? parseNum(rawAmount) : (variable ? 0 : NaN);
   const date = $("f-date").value;
-  const err = !name ? "Укажите название платежа." : !(amount>0 || (variable && amount===0)) ? (variable ? "Сумма должна быть числом, например 2500, или оставьте поле пустым." : "Сумма должна быть числом больше нуля, например 299 или 1499,90. Если сумма каждый раз разная, отметьте «Сумма меняется».") : !date ? "Выберите дату следующей оплаты." : "";
+  const err = !name ? "Укажите название платежа." : !(amount>0 || (variable && amount===0)) ? (variable ? "После ~ укажите примерную сумму, например ~2500, или оставьте только ~." : "Сумма должна быть числом больше нуля, например 299 или 1499,90. Если сумма каждый раз разная, поставьте ~ перед ней.") : !date ? "Выберите дату следующей оплаты." : "";
   if (err){ $("f-err").textContent = err; $("f-err").hidden = false; return; }
   const old = state.editing ? state.items.find(i=>i.id===state.editing) : null;
   const item = Object.assign({}, old||{}, {
@@ -532,6 +547,12 @@ $("form").addEventListener("submit", async e => {
   if (ok){ closeForm(); toast(old ? "Сохранено" : "«"+name+"» добавлен"); }
 });
 $("f-cancel").onclick = closeForm;
+$("f-amount").addEventListener("input", syncTilde);
+$("f-tilde").onclick = () => {
+  const f = $("f-amount");
+  f.value = isVariable(f.value) ? f.value.replace(/^\s*[~≈]\s*/, "") : "~" + f.value.trim();
+  syncTilde(); f.focus();
+};
 $("overlay").addEventListener("click", e => { if (e.target.id==="overlay") closeForm(); });
 document.addEventListener("keydown", e => { if (e.key==="Escape" && !$("overlay").hidden) closeForm(); });
 $("add-btn").onclick = () => openForm();

@@ -308,7 +308,9 @@ def test_variable_amount_payment(open_page, server):
     page = open_page()
     page.click("#add-btn")
     page.fill("#f-name", "Электричество")
-    page.check("#f-var")
+    page.fill("#f-amount", "~")
+    expect(page.locator("#f-tilde")).to_have_attribute("aria-pressed", "true")
+    expect(page.locator("#f-amount-hint")).to_contain_text("плавающая сумма")
     page.fill("#f-date", "2026-10-20")
     page.click("#f-save")
     r = row(page, "Электричество")
@@ -322,15 +324,15 @@ def test_variable_amount_payment(open_page, server):
     page.keyboard.press("Enter")
     wait_for(lambda: server.subs()[sid]["nextDate"] == "2026-11-20")
     assert server.subs()[sid]["history"][-1]["amount"] == 2340.5
-    expect(r).to_contain_text("≈ 2 341 ₽")
+    expect(r).to_contain_text("~2 341 ₽")
 
     # the estimate is the average of the last payments
     pay(page, "Электричество")
     page.fill("#pay-amt", "2660")
     r.get_by_role("button", name="Готово").click()
     wait_for(lambda: server.subs()[sid]["nextDate"] == "2026-12-20")
-    expect(r).to_contain_text("≈ 2 500 ₽")
-    expect(page.locator("#stats .stat").nth(2)).to_contain_text("≈ 2 500 ₽")
+    expect(r).to_contain_text("~2 500 ₽")
+    expect(page.locator("#stats .stat").nth(2)).to_contain_text("~2 500 ₽")
 
     # an empty amount is refused, cancel leaves the payment untouched
     pay(page, "Электричество")
@@ -339,3 +341,21 @@ def test_variable_amount_payment(open_page, server):
     expect(page.locator("#toast")).to_contain_text("Введите сумму")
     r.get_by_role("button", name="Отмена").click()
     assert server.subs()[sid]["nextDate"] == "2026-12-20"
+
+
+def test_tilde_button_and_edit(open_page, server):
+    server.put("w1", **sub("Вода", "2026-10-22", amount=900))
+    page = open_page()
+    row(page, "Вода").get_by_role("button", name="Изменить").click()
+    expect(page.locator("#f-amount")).to_have_value("900")
+    page.click("#f-tilde")  # phone keyboards have no "~", the button adds it
+    expect(page.locator("#f-amount")).to_have_value("~900")
+    page.click("#f-save")
+    wait_for(lambda: server.subs()["w1"].get("variable") is True)
+    assert server.subs()["w1"]["amount"] == 900
+    expect(row(page, "Вода")).to_contain_text("~900 ₽")
+    row(page, "Вода").get_by_role("button", name="Изменить").click()
+    expect(page.locator("#f-amount")).to_have_value("~900")
+    page.click("#f-tilde")
+    page.click("#f-save")
+    wait_for(lambda: server.subs()["w1"].get("variable") is False)
