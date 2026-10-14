@@ -1,0 +1,19 @@
+[Unit]
+Description=Мои платежи — трекер подписок и регулярных платежей
+After=network.target
+
+[Service]
+# Assumes the project lives in ~/Projects/platezhi; change the paths if it doesn't.
+WorkingDirectory=%h/Projects/platezhi
+ExecStart=/usr/bin/python3 %h/Projects/platezhi/server.py
+# Local settings (port, host, password) live in .env, which is not committed. See .env.example.
+EnvironmentFile=-%h/Projects/platezhi/.env
+Restart=on-failure
+# resource caps: the app needs ~25 MB and almost no CPU
+MemoryMax=64M
+CPUQuota=20%
+Nice=10
+TasksMax=32
+
+[Install]
+WantedBy=default.target

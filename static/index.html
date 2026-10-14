@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Мои платежи</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Onest:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: summary strip on top, payment list (main) + month calendar (aside); stacks on phones */
+:root{
+  --bg:#f2f3f7; --surface:#ffffff; --fg:#151829; --muted:#5f6582; --line:#dcdfe9;
+  --accent:#3243c9; --accent-ink:#ffffff;
+  --danger:#c2362c; --warn:#a96f12; --ok:#2b8152;
+  --f-display:"Unbounded", "Onest", system-ui, sans-serif;
+  --f-body:"Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1020; --surface:#171a2d; --fg:#e6e8f4; --muted:#9ba1bf; --line:#2a2e48;
+  --accent:#8a98ff; --accent-ink:#0e1020; --danger:#ff7d71; --warn:#efb55c; --ok:#62cf91; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1020; --surface:#171a2d; --fg:#e6e8f4; --muted:#9ba1bf; --line:#2a2e48;
+  --accent:#8a98ff; --accent-ink:#0e1020; --danger:#ff7d71; --warn:#efb55c; --ok:#62cf91; color-scheme:dark}
+
+*{box-sizing:border-box}
+html{color-scheme:light}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:16px;padding-block:28px 48px;display:grid;gap:24px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(24px,4vw,32px);letter-spacing:-.01em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;font-weight:500}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn.ghost:hover{color:var(--fg);border-color:var(--line)}
+.btn.danger{color:var(--danger)}
+
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.stat{background:var(--surface);padding:14px 16px;display:grid;gap:2px;min-width:0}
+.stat .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.stat .val{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:20px;font-weight:500;overflow-wrap:anywhere}
+.stat .hint{font-size:13px;color:var(--muted)}
+.stat.alert .val{color:var(--danger)}
+@media (max-width:760px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:24px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.seg button{border:1px solid var(--line);background:transparent;border-radius:999px;padding:4px 12px;font-size:13px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+
+.group{display:grid;gap:8px;margin-bottom:20px}
+.group h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 2px;font-weight:600;display:flex;gap:8px}
+.group h2 .num{color:var(--fg)}
+.item{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:14px;align-items:center;position:relative}
+.item.overdue{border-color:color-mix(in srgb,var(--danger) 55%,var(--line))}
+.date{display:grid;justify-items:center;line-height:1.1;border-right:1px dashed var(--line);padding-right:12px}
+.date .d{font-family:var(--f-display);font-size:22px;font-weight:500}
+.date .m{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.info{min-width:0;display:grid;gap:3px}
+.name{font-weight:600;overflow-wrap:anywhere}
+.meta{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+.right{display:grid;justify-items:end;gap:6px}
+.amount{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:17px;font-weight:500;white-space:nowrap}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.pill.late{color:var(--danger);background:color-mix(in srgb,var(--danger) 13%,transparent)}
+.pill.soon{color:var(--warn);background:color-mix(in srgb,var(--warn) 15%,transparent)}
+.pill.today{color:var(--accent-ink);background:var(--danger)}
+.pill.later{color:var(--muted);background:color-mix(in srgb,var(--muted) 12%,transparent)}
+.pill.ex{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.actions{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.paid{color:var(--ok);font-size:13px}
+@media (max-width:520px){
+  .item{grid-template-columns:52px minmax(0,1fr)}
+  .right{grid-column:1 / -1;grid-template-columns:auto 1fr;justify-items:start;align-items:center}
+  .right .actions{justify-self:end}
+  .date .d{font-size:19px}
+}
+
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);padding:28px 20px;text-align:center;color:var(--muted);display:grid;gap:10px;justify-items:center}
+.empty strong{color:var(--fg);font-size:16px}
+
+aside{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;min-width:0}
+.card{min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cal-head h3{margin:0;font-family:var(--f-display);font-weight:500;font-size:15px;text-transform:capitalize}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.cal .wd{font-size:11px;color:var(--muted);text-transform:uppercase;padding-bottom:4px}
+.cal .c{aspect-ratio:1;max-width:100%;border-radius:6px;display:grid;place-items:center;font-size:13px;position:relative;font-variant-numeric:tabular-nums}
+.cal .c.has{background:color-mix(in srgb,var(--accent) 12%,transparent);font-weight:600;cursor:default}
+.cal .c.has.late{background:color-mix(in srgb,var(--danger) 16%,transparent);color:var(--danger)}
+.cal .c.today{outline:1.5px solid var(--fg);outline-offset:-1.5px}
+.cal .c .dots{position:absolute;bottom:3px;left:0;right:0;display:flex;justify-content:center;gap:2px}
+.cal .c .dots i{width:4px;height:4px;border-radius:50%;background:var(--accent)}
+.cal .c.late .dots i{background:var(--danger)}
+.month-sum{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);display:grid;gap:6px;font-size:14px;grid-template-columns:minmax(0,1fr)}
+.month-sum .row{display:flex;justify-content:space-between;gap:8px}
+.month-sum .row .num{white-space:nowrap}
+.month-sum .row span:first-child{color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cats .row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;font-size:14px;margin-bottom:8px}
+.bar{grid-column:1 / -1;height:5px;border-radius:3px;background:color-mix(in srgb,var(--muted) 15%,transparent);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.card h3.t{margin:0 0 12px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+
+.overlay{position:fixed;inset:0;background:color-mix(in srgb,var(--bg) 70%,transparent);backdrop-filter:blur(3px);display:grid;place-items:center;padding:16px;z-index:10}
+form.sheet{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;width:min(480px,100%);display:grid;gap:14px;box-shadow:0 20px 50px rgba(10,12,30,.25);max-height:100%;overflow:auto}
+form.sheet h2{margin:0;font-family:var(--f-display);font-weight:500;font-size:18px}
+.fld{display:grid;gap:4px;min-width:0}
+.fld label{font-size:13px;color:var(--muted)}
+.fld input,.fld select{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.err{color:var(--danger);font-size:13px;margin:0}
+.form-actions{display:flex;justify-content:flex-end;gap:8px}
+.notice{font-size:13px;color:var(--muted);background:color-mix(in srgb,var(--warn) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--warn) 30%,var(--line));border-radius:8px;padding:8px 12px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:14px;z-index:20;display:flex;gap:12px;align-items:center;max-width:calc(100% - 32px)}
+.toast button{background:transparent;border:0;color:var(--bg);text-decoration:underline;font-weight:600;padding:0}
+@media (prefers-reduced-motion:no-preference){.item{transition:border-color .15s}.toast{animation:up .2s ease-out}@keyframes up{from{transform:translate(-50%,8px);opacity:0}}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Мои платежи</h1>
+      <p class="sub" id="today-line">Подписки и регулярные списания</p>
+    </div>
+    <button class="btn primary" id="add-btn" type="button">+ Добавить платёж</button>
+  </header>
+
+  <div id="notice" class="notice" hidden></div>
+
+  <section class="stats" id="stats" aria-label="Сводка"></section>
+
+  <div class="layout">
+    <main>
+      <div class="toolbar">
+        <div class="seg" id="filter" role="group" aria-label="Фильтр"></div>
+        <button class="btn small ghost" id="clear-ex" type="button" hidden>Удалить примеры</button>
+      </div>
+      <div id="list"><div class="empty"><strong>Загружаем ваши платежи…</strong></div></div>
+    </main>
+    <aside>
+      <div class="card">
+        <div class="cal-head">
+          <button class="btn small ghost" id="prev-m" type="button" aria-label="Предыдущий месяц">‹</button>
+          <h3 id="cal-title"></h3>
+          <button class="btn small ghost" id="next-m" type="button" aria-label="Следующий месяц">›</button>
+        </div>
+        <div class="cal" id="cal"></div>
+        <div class="month-sum" id="month-sum"></div>
+      </div>
+      <div class="card cats">
+        <h3 class="t">В месяц по категориям</h3>
+        <div id="cats"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="overlay" id="overlay" hidden>
+  <form class="sheet" id="form" novalidate>
+    <h2 id="form-title">Новый платёж</h2>
+    <div class="fld"><label for="f-name">Название</label><input id="f-name" placeholder="Например, Яндекс Плюс" maxlength="80" autocomplete="off"></div>
+    <div class="row2">
+      <div class="fld"><label for="f-amount">Сумма</label><input id="f-amount" inputmode="decimal" placeholder="299"></div>
+      <div class="fld"><label for="f-cur">Валюта</label>
+        <select id="f-cur"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option></select></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label for="f-cycle">Периодичность</label>
+        <select id="f-cycle"><option value="month">Каждый месяц</option><option value="week">Каждую неделю</option><option value="quarter">Раз в квартал</option><option value="year">Раз в год</option><option value="once">Разово</option></select></div>
+      <div class="fld"><label for="f-date">Следующая оплата</label><input id="f-date" type="date"></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label for="f-cat">Категория</label>
+        <select id="f-cat"></select></div>
+      <div class="fld"><label for="f-method">Чем платить</label><input id="f-method" placeholder="Карта *4421" maxlength="40" autocomplete="off"></div>
+    </div>
+    <p class="err" id="f-err" hidden></p>
+    <div class="form-actions">
+      <button class="btn" type="button" id="f-cancel">Отмена</button>
+      <button class="btn primary" type="submit" id="f-save">Сохранить</button>
+    </div>
+  </form>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+const CATS = ["Сервисы и подписки","Связь и интернет","ЖКХ","Кредиты и рассрочки","Страхование","Здоровье и спорт","Другое"];
+const CYCLE = {month:"ежемесячно",week:"еженедельно",quarter:"раз в квартал",year:"ежегодно",once:"разово"};
+const PER_MONTH = {month:1,week:52/12,quarter:1/3,year:1/12,once:0};
+const SYM = {RUB:"₽",USD:"$",EUR:"€"};
+const MON = ["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
+
+const $ = id => document.getElementById(id);
+const state = {items:[], loaded:false, filter:"all", cal:null, editing:null, confirm:null};
+
+/* ---------- dates ---------- */
+const pad = n => String(n).padStart(2,"0");
+const iso = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const parse = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y,m-1,d); };
+const todayD = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
+const daysBetween = (a,b) => Math.round((b-a)/86400000);
+const lastDay = (y,m) => new Date(y,m+1,0).getDate();
+function addMonths(s, n, anchor){
+  const d = parse(s); const y = d.getFullYear(), m = d.getMonth()+n;
+  const t = new Date(y, m, 1);
+  t.setDate(Math.min(anchor || d.getDate(), lastDay(t.getFullYear(), t.getMonth())));
+  return iso(t);
+}
+function advance(s, cycle, anchor){
+  if (cycle==="week"){ const d = parse(s); d.setDate(d.getDate()+7); return iso(d); }
+  if (cycle==="month") return addMonths(s,1,anchor);
+  if (cycle==="quarter") return addMonths(s,3,anchor);
+  if (cycle==="year") return addMonths(s,12,anchor);
+  return null;
+}
+function relLabel(n){
+  if (n<0){ const a=-n; return "просрочено на "+a+" "+plural(a,"день","дня","дней"); }
+  if (n===0) return "сегодня";
+  if (n===1) return "завтра";
+  return "через "+n+" "+plural(n,"день","дня","дней");
+}
+function plural(n,a,b,c){ n=Math.abs(n)%100; const n1=n%10; if(n>10&&n<20) return c; if(n1>1&&n1<5) return b; if(n1===1) return a; return c; }
+
+/* ---------- money ---------- */
+function money(v,cur){
+  const s = new Intl.NumberFormat("ru-RU",{maximumFractionDigits: v%1 ? 2 : 0}).format(v);
+  return cur==="RUB" ? s+" ₽" : (SYM[cur]||"")+s;
+}
+function sumByCur(list, fn){
+  const out = {}; list.forEach(i => { const v = fn(i); if (v) out[i.currency] = (out[i.currency]||0)+v; });
+  return out;
+}
+function fmtSums(o){
+  const keys = ["RUB","USD","EUR"].filter(k => o[k]);
+  return keys.length ? keys.map(k => money(Math.round(o[k]*100)/100,k)).join(" · ") : "0 ₽";
+}
+
+/* ---------- storage: the server's JSON API ---------- */
+async function api(method, path, body){
+  const r = await fetch("api/subs"+path, {method, headers: body ? {"Content-Type":"application/json"} : {}, body: body ? JSON.stringify(body) : undefined});
+  if (!r.ok) throw {code: "HTTP "+r.status};
+  return r.status===204 ? null : r.json();
+}
+let lastList = null;
+const store = {
+  async load(){
+    try {
+      // the server answers 304 when nothing changed; skip the redraw then too
+      const r = await fetch("api/subs");
+      if (!r.ok) throw {code: "HTTP "+r.status};
+      const text = await r.text();
+      $("notice").hidden = true;
+      if (text===lastList && state.loaded) return;
+      lastList = text; setItems(JSON.parse(text));
+    }
+    catch(e){ showNotice("Сервер не отвечает ("+(e.code||"нет связи")+"). Данные обновятся, когда связь вернётся."); }
+  },
+  async save(item){ await api("PUT","/"+encodeURIComponent(item.id), item); await store.load(); },
+  async remove(id){ await api("DELETE","/"+encodeURIComponent(id)); await store.load(); }
+};
+function setItems(list){ state.items = list; state.loaded = true; render(); }
+function showNotice(t){ const n=$("notice"); n.textContent=t; n.hidden=false; }
+
+function boot(){
+  store.load();
+  // pick up changes made on another device; one timer, idle while the tab is hidden
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) store.load(); });
+  let day = iso(todayD());
+  setInterval(() => {
+    if (document.hidden) return;
+    const d = iso(todayD());
+    if (d!==day){ day=d; render(); }  // redraw "days left" labels after midnight
+    if ($("overlay").hidden) store.load();
+  }, 60000);
+}
+
+/* ---------- derived ---------- */
+function decorate(i){
+  const t = todayD();
+  const days = i.nextDate ? daysBetween(t, parse(i.nextDate)) : 9999;
+  return Object.assign({}, i, {days});
+}
+function occurrencesIn(i, y, m){
+  // every due date of item i falling in month (y,m), projected forward from nextDate
+  if (!i.nextDate) return [];
+  const res = []; let s = i.nextDate; let guard = 0;
+  const start = new Date(y,m,1), end = new Date(y,m+1,0);
+  while (s && guard++ < 80){
+    const d = parse(s);
+    if (d > end) break;
+    if (d >= start) res.push(d.getDate());
+    s = advance(s, i.cycle, i.anchorDay);
+  }
+  return res;
+}
+
+/* ---------- render ---------- */
+function render(){
+  const t = todayD();
+  $("today-line").textContent = "Сегодня " + t.getDate()+" "+MON[t.getMonth()]+" "+t.getFullYear()+" · подписки и регулярные списания";
+  const items = state.items.map(decorate).sort((a,b) => a.days-b.days || a.name.localeCompare(b.name,"ru"));
+  renderStats(items); renderFilter(items); renderList(items); renderCal(items); renderCats(items);
+  $("clear-ex").hidden = !items.some(i => i.example);
+}
+
+function renderStats(items){
+  const overdue = items.filter(i => i.days<0);
+  const week = items.filter(i => i.days>=0 && i.days<=7);
+  const monthly = sumByCur(items, i => i.amount*(PER_MONTH[i.cycle]||0));
+  const yearly = {}; Object.keys(monthly).forEach(k => yearly[k]=monthly[k]*12);
+  const recurring = items.filter(i => i.cycle!=="once").length;
+  $("stats").innerHTML =
+    stat("Просрочено", overdue.length ? fmtSums(sumByCur(overdue,i=>i.amount)) : "нет", overdue.length ? overdue.length+" "+plural(overdue.length,"платёж","платежа","платежей") : "всё оплачено вовремя", overdue.length>0) +
+    stat("Ближайшие 7 дней", fmtSums(sumByCur(week,i=>i.amount)), week.length+" "+plural(week.length,"платёж","платежа","платежей")) +
+    stat("В среднем в месяц", fmtSums(monthly), recurring+" "+plural(recurring,"регулярный","регулярных","регулярных")) +
+    stat("В год", fmtSums(yearly), "по текущим тарифам");
+}
+function stat(l,v,h,alert){ return `<div class="stat${alert?" alert":""}"><span class="lbl">${l}</span><span class="val">${esc(v)}</span><span class="hint">${esc(h)}</span></div>`; }
+
+function renderFilter(items){
+  const used = CATS.filter(c => items.some(i => i.category===c));
+  const opts = [["all","Все"]].concat(used.map(c=>[c,c]));
+  if (!opts.some(o=>o[0]===state.filter)) state.filter="all";
+  $("filter").innerHTML = opts.map(([v,l]) => `<button type="button" data-f="${esc(v)}" aria-pressed="${state.filter===v}">${esc(l)}</button>`).join("");
+}
+
+function renderList(items){
+  const el = $("list");
+  if (!state.loaded){ return; }
+  const list = items.filter(i => state.filter==="all" || i.category===state.filter);
+  if (!items.length){
+    el.innerHTML = `<div class="empty"><strong>Пока нет ни одного платежа</strong><span>Добавьте подписку, связь, коммуналку или кредит — здесь появится список с датами и суммами.</span><button class="btn primary" type="button" data-act="add">+ Добавить первый платёж</button></div>`;
+    return;
+  }
+  const groups = [
+    ["Просрочено", list.filter(i=>i.days<0)],
+    ["На этой неделе", list.filter(i=>i.days>=0 && i.days<=7)],
+    ["В ближайший месяц", list.filter(i=>i.days>7 && i.days<=31)],
+    ["Позже", list.filter(i=>i.days>31)]
+  ].filter(g => g[1].length);
+  el.innerHTML = groups.map(([title, arr]) =>
+    `<section class="group"><h2>${title}<span class="num">${fmtSums(sumByCur(arr,i=>i.amount))}</span></h2>${arr.map(row).join("")}</section>`
+  ).join("") || `<div class="empty">В этой категории платежей нет.</div>`;
+}
+
+function row(i){
+  const d = i.nextDate ? parse(i.nextDate) : null;
+  const cls = i.days<0 ? "late" : i.days===0 ? "today" : i.days<=7 ? "soon" : "later";
+  const confirming = state.confirm===i.id;
+  const paidNote = i.lastPaid ? `<span class="paid">✓ оплачено ${fmtShort(i.lastPaid)}</span>` : "";
+  const actions = confirming
+    ? `<span class="meta">Удалить?</span><button class="btn small danger" data-act="del-yes" data-id="${i.id}" type="button">Да</button><button class="btn small" data-act="del-no" type="button">Нет</button>`
+    : `<button class="btn small primary" data-act="pay" data-id="${i.id}" type="button">Оплачено</button><button class="btn small ghost" data-act="edit" data-id="${i.id}" type="button" aria-label="Изменить ${esc(i.name)}">Изменить</button><button class="btn small ghost" data-act="del" data-id="${i.id}" type="button" aria-label="Удалить ${esc(i.name)}">✕</button>`;
+  return `<article class="item${i.days<0?" overdue":""}">
+    <div class="date">${d?`<span class="d">${d.getDate()}</span><span class="m">${MON[d.getMonth()]}</span>`:"—"}</div>
+    <div class="info">
+      <div class="name">${esc(i.name)} ${i.example?'<span class="pill ex">пример</span>':""}</div>
+      <div class="meta"><span>${CYCLE[i.cycle]||""}</span><span>${esc(i.category||"")}</span>${i.method?`<span>${esc(i.method)}</span>`:""}${paidNote}</div>
+    </div>
+    <div class="right">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><span class="pill ${cls}">${relLabel(i.days)}</span><span class="amount">${money(i.amount,i.currency)}</span></div>
+      <div class="actions">${actions}</div>
+    </div>
+  </article>`;
+}
+function fmtShort(s){ const d=parse(s); return d.getDate()+" "+MON[d.getMonth()]; }
+
+function renderCal(items){
+  if (!state.cal){ const t=todayD(); state.cal = {y:t.getFullYear(), m:t.getMonth()}; }
+  const {y,m} = state.cal; const t = todayD();
+  $("cal-title").textContent = new Date(y,m,1).toLocaleDateString("ru-RU",{month:"long",year:"numeric"});
+  const byDay = {}; const monthList = [];
+  items.forEach(i => occurrencesIn(i,y,m).forEach(day => { (byDay[day] = byDay[day]||[]).push(i); monthList.push(i); }));
+  let html = ["пн","вт","ср","чт","пт","сб","вс"].map(w=>`<div class="wd">${w}</div>`).join("");
+  const offset = (new Date(y,m,1).getDay()+6)%7;
+  for (let k=0;k<offset;k++) html += `<div></div>`;
+  for (let day=1; day<=lastDay(y,m); day++){
+    const list = byDay[day]||[];
+    const date = new Date(y,m,day);
+    const late = list.some(i => i.days<0 && iso(date)===i.nextDate);
+    const isToday = date.getTime()===t.getTime();
+    const title = list.map(i=>i.name+" — "+money(i.amount,i.currency)).join("\n");
+    html += `<div class="c${list.length?" has":""}${late?" late":""}${isToday?" today":""}"${title?` title="${esc(title)}"`:""}>${day}${list.length?`<span class="dots">${list.slice(0,3).map(()=>"<i></i>").join("")}</span>`:""}</div>`;
+  }
+  $("cal").innerHTML = html;
+  const days = Object.keys(byDay).map(Number).sort((a,b)=>a-b);
+  const total = {}; days.forEach(d => byDay[d].forEach(i => total[i.currency]=(total[i.currency]||0)+i.amount));
+  $("month-sum").innerHTML = days.length
+    ? days.slice(0,8).map(d => byDay[d].map(i=>`<div class="row"><span>${d} · ${esc(i.name)}</span><span class="num">${money(i.amount,i.currency)}</span></div>`).join("")).join("")
+      + (days.length>8?`<div class="row"><span>и ещё ${days.length-8} ${plural(days.length-8,"день","дня","дней")} с оплатами</span><span></span></div>`:"")
+      + `<div class="row" style="font-weight:600"><span style="color:var(--fg)">Итого за месяц</span><span class="num">${fmtSums(total)}</span></div>`
+    : `<div class="row"><span>В этом месяце платежей нет</span></div>`;
+}
+
+function renderCats(items){
+  const rub = {}; let max = 0;
+  const per = sumByCur(items, i => i.amount*(PER_MONTH[i.cycle]||0));
+  const cur = Object.keys(per).sort((a,b)=>per[b]-per[a])[0] || "RUB";
+  items.filter(i=>i.currency===cur).forEach(i => { const v=i.amount*(PER_MONTH[i.cycle]||0); if(v){ rub[i.category]=(rub[i.category]||0)+v; } });
+  Object.values(rub).forEach(v => max=Math.max(max,v));
+  const rows = Object.entries(rub).sort((a,b)=>b[1]-a[1]);
+  $("cats").innerHTML = rows.length
+    ? rows.map(([c,v]) => `<div class="row"><span>${esc(c)}</span><span class="num">${money(Math.round(v),cur)}</span><div class="bar"><i style="width:${Math.max(3,v/max*100)}%"></i></div></div>`).join("")
+      + (Object.keys(per).length>1?`<div class="meta">Показаны платежи в ${cur==="RUB"?"рублях":cur}</div>`:"")
+    : `<div class="meta">Появится, когда добавите регулярные платежи.</div>`;
+}
+
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+/* ---------- actions ---------- */
+let toastTimer;
+function toast(text, undo){
+  const el = $("toast"); el.innerHTML = ""; el.append(document.createTextNode(text));
+  if (undo){ const b=document.createElement("button"); b.type="button"; b.textContent="Отменить"; b.onclick=()=>{ el.hidden=true; undo(); }; el.append(b); }
+  el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(()=>el.hidden=true, 5000);
+}
+async function safe(p, msg){ try { await p; return true; } catch(e){ toast(msg+" ("+(e&&e.code||"ошибка")+")"); return false; } }
+
+async function markPaid(id){
+  const it = state.items.find(i=>i.id===id); if(!it) return;
+  const before = Object.assign({}, it);
+  const today = iso(todayD());
+  const history = (it.history||[]).concat([{date:today, due:it.nextDate, amount:it.amount, currency:it.currency}]).slice(-24);
+  if (it.cycle==="once"){
+    if (await safe(store.remove(id),"Не удалось сохранить")) toast("«"+it.name+"» оплачен и убран из списка", () => store.save(before));
+    return;
+  }
+  const next = advance(it.nextDate, it.cycle, it.anchorDay);
+  const upd = Object.assign({}, it, {nextDate:next, lastPaid:today, history});
+  if (await safe(store.save(upd),"Не удалось сохранить")) toast("Отмечено. Следующая оплата "+fmtShort(next), () => store.save(before));
+}
+
+function openForm(id){
+  state.editing = id || null;
+  const it = id ? state.items.find(i=>i.id===id) : null;
+  $("form-title").textContent = it ? "Изменить платёж" : "Новый платёж";
+  $("f-name").value = it ? it.name : "";
+  $("f-amount").value = it ? String(it.amount).replace(".",",") : "";
+  $("f-cur").value = it ? it.currency : "RUB";
+  $("f-cycle").value = it ? it.cycle : "month";
+  $("f-date").value = it ? it.nextDate : iso(todayD());
+  $("f-cat").value = it ? it.category : CATS[0];
+  $("f-method").value = it ? (it.method||"") : "";
+  $("f-err").hidden = true;
+  $("overlay").hidden = false;
+  setTimeout(()=>$("f-name").focus(), 0);
+}
+function closeForm(){ $("overlay").hidden = true; state.editing = null; }
+
+$("f-cat").innerHTML = CATS.map(c=>`<option>${c}</option>`).join("");
+$("form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = $("f-name").value.trim();
+  const amount = parseFloat($("f-amount").value.replace(/\s/g,"").replace(",","."));
+  const date = $("f-date").value;
+  const err = !name ? "Укажите название платежа." : !(amount>0) ? "Сумма должна быть числом больше нуля, например 299 или 1499,90." : !date ? "Выберите дату следующей оплаты." : "";
+  if (err){ $("f-err").textContent = err; $("f-err").hidden = false; return; }
+  const old = state.editing ? state.items.find(i=>i.id===state.editing) : null;
+  const item = Object.assign({}, old||{}, {
+    id: old ? old.id : "s"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    name, amount: Math.round(amount*100)/100, currency:$("f-cur").value, cycle:$("f-cycle").value,
+    nextDate: date, anchorDay: parse(date).getDate(), category:$("f-cat").value, method:$("f-method").value.trim()
+  });
+  if (old && old.example && old.name!==name) delete item.example;
+  $("f-save").disabled = true;
+  const ok = await safe(store.save(item), "Не удалось сохранить");
+  $("f-save").disabled = false;
+  if (ok){ closeForm(); toast(old ? "Сохранено" : "«"+name+"» добавлен"); }
+});
+$("f-cancel").onclick = closeForm;
+$("overlay").addEventListener("click", e => { if (e.target.id==="overlay") closeForm(); });
+document.addEventListener("keydown", e => { if (e.key==="Escape" && !$("overlay").hidden) closeForm(); });
+$("add-btn").onclick = () => openForm();
+$("prev-m").onclick = () => { let {y,m}=state.cal; m--; if(m<0){m=11;y--;} state.cal={y,m}; render(); };
+$("next-m").onclick = () => { let {y,m}=state.cal; m++; if(m>11){m=0;y++;} state.cal={y,m}; render(); };
+$("filter").addEventListener("click", e => { const b=e.target.closest("button"); if(!b) return; state.filter=b.dataset.f; render(); });
+$("clear-ex").onclick = async () => { for (const i of state.items.filter(i=>i.example)) await safe(store.remove(i.id),"Не удалось удалить"); toast("Примеры удалены"); };
+$("list").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act]"); if(!b) return;
+  const id = b.dataset.id;
+  switch (b.dataset.act){
+    case "add": openForm(); break;
+    case "pay": b.disabled = true; await markPaid(id); break;
+    case "edit": openForm(id); break;
+    case "del": state.confirm = id; render(); break;
+    case "del-no": state.confirm = null; render(); break;
+    case "del-yes": {
+      const it = state.items.find(i=>i.id===id); state.confirm = null;
+      if (await safe(store.remove(id),"Не удалось удалить")) toast("«"+it.name+"» удалён", () => store.save(it));
+      break;
+    }
+  }
+});
+
+render();
+boot();
+})();
+</script>
+
+</body>
+</html>

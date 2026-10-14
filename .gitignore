@@ -1,0 +1,12 @@
+# local settings and personal data
+.env
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# python / tooling
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
